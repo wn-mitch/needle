@@ -176,7 +176,8 @@ class FakeElement {
     this.listeners.set(type, listeners);
   }
   dispatch(type, event = {}) {
-    const e = { type, target: this, currentTarget: this, preventDefault() {}, ...event };
+    const e = { type, target: this, currentTarget: this, defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; }, stopPropagation() {}, ...event };
     if (type === 'click' && this.onclick) this.onclick(e);
     if (type === 'input' && this.oninput) this.oninput(e);
     for (const listener of this.listeners.get(type) || []) listener(e);
@@ -186,6 +187,10 @@ class FakeElement {
   focus() { this.ownerDocument.activeElement = this; }
   blur() { if (this.ownerDocument.activeElement === this) this.ownerDocument.activeElement = null; }
   select() {}
+  contains(element) {
+    for (let node = element; node; node = node.parentElement) if (node === this) return true;
+    return false;
+  }
   matches(selector) { return matches(this, selector); }
   closest(selector) {
     for (let node = this; node; node = node.parentElement) if (matches(node, selector)) return node;
@@ -203,7 +208,7 @@ class FakeElement {
     return out;
   }
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
-  getBoundingClientRect() { return { left: 0, width: 100 }; }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }; }
 }
 
 class FakeDocument extends FakeElement {
@@ -221,7 +226,7 @@ class FakeDocument extends FakeElement {
     this.documentElement.appendChild(this.body);
     for (const id of ['gate','gateSetup','gateLogin','gateErr','redir','cid','saveCid','loginBtn','resetCid',
       'main','status','toast','pls','nav','genres','genreBtn','qset','ql','now','likeNow','pp','shuf','bar',
-      'barFill','tpos','tdur','vol','back','theme','q','qclose','qtoggle','next','prev','radioNow']) {
+      'barFill','tpos','tdur','vol','back','theme','q','qclose','qtoggle','next','prev','radioNow','trackMenu']) {
       const element = new FakeElement(this, id === 'q' || id === 'vol' || id === 'cid' ? 'input' : 'div', id);
       this.ids.set(id, element);
       this.body.appendChild(element);
@@ -276,7 +281,8 @@ function createHarness({ storage = {}, random = () => 0.5 } = {}) {
   const context = vm.createContext({
     console: { log() {}, warn() {}, error() {} }, document, localStorage,
     location: { origin: 'http://example.test', pathname: '/', search: '', href: '' },
-    history: { replaceState() {} }, navigator: {}, innerWidth: 1280,
+    history: { replaceState() {} }, navigator: {}, innerWidth: 1280, innerHeight: 768,
+    addEventListener: document.addEventListener.bind(document),
     CSS: { escape: value => String(value).replace(/["\\]/g, '\\$&') },
     MediaMetadata: class MediaMetadata { constructor(data) { Object.assign(this, data); } },
     URL, URLSearchParams, TextEncoder, Uint8Array, Set, Map, WeakMap, Promise, Error, JSON, Math: Object.create(Math),

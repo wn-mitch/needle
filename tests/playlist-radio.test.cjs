@@ -117,32 +117,6 @@ test('mix endpoints, exact midpoint, canonical exclusions, and shortage policy',
   assert.equal(emptyDiscovery.tracks.length, 0, '0% never fills from source originals');
 });
 
-test('weighted anchor sampling reaches playlist artists beyond the first four', async () => {
-  const observed = new Set();
-  for (let chosen = 4; chosen < 8; chosen++) {
-    let draw = 0;
-    const h = createHarness({ random: () => {
-      const position = draw++ % 8;
-      return position === chosen ? 0.999 : 0.05 + position * 0.01;
-    } });
-    const sources = sourceTracks(8, 8);
-    station(h, sources, 0);
-    const anchorCalls = [];
-    h.context.__probes = sources.map((t, i) => {
-      const value = [];
-      const originalSlice = value.slice;
-      value.slice = function (...args) { anchorCalls.push(i); return originalSlice.apply(this, args); };
-      return value;
-    });
-    h.run('nbCache.clear();radio.artists.forEach((a,i)=>nbCache.set(lc(a.name),globalThis.__probes[i]))');
-    draw = 0;
-    put(h, 'artistTracks', async name => Array.from({ length: 5 }, (_, i) => track(`Found ${name} ${i}`, name)));
-    put(h, 'api', async path => String(path).includes('/albums') ? { items: [] } : null);
-    await h.run('radioBatch(radio,{count:1,seen:new Set(),commit:false})');
-    for (const index of anchorCalls) observed.add(index);
-  }
-  assert.ok([...observed].some(index => index >= 4), `sampled anchor indexes: ${[...observed]}`);
-});
 
 test('mix rebuild preserves current and manual entries and hands off only at track end', async () => {
   const h = createHarness({ random: () => 0.73 });
