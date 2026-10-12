@@ -707,22 +707,32 @@ function initSDK(){
   const s=document.createElement('script');s.src='https://sdk.scdn.co/spotify-player.js';document.head.appendChild(s);
 }
 
-let prefsSet=false;
+let prefsSet=false,windowSend=Promise.resolve();
 async function sendWindow(i,pos=0){
   if(!deviceId){toast('Player is not ready yet');return}
   if(!queue[i])return;
   mode='queue';
   const uris=queue.slice(i,i+WIN).map(t=>t.uri);
-  sent={start:i,uris};dirty=false;ended=false;
-  switching={i,until:Date.now()+5000};offQueue=false;ranOut=false;
-  try{
-    await api('/me/player/play',{method:'PUT',query:{device_id:deviceId},body:{uris,position_ms:Math.max(0,Math.floor(pos))}});
-  }catch(e){switching=null;toast(e.message);return}
-  if(!prefsSet){
-    prefsSet=true;
-    api('/me/player/shuffle',{method:'PUT',query:{state:false,device_id:deviceId}}).catch(()=>{});
-    api('/me/player/repeat',{method:'PUT',query:{state:'off',device_id:deviceId}}).catch(()=>{});
-  }
+  const window=sent={start:i,uris};dirty=false;ended=false;
+  switching={i,pending:true,until:Infinity};offQueue=false;ranOut=false;
+  /* Spotify does not order simultaneous playback commands; obsolete waiting windows are skipped. */
+  windowSend=windowSend.then(async()=>{
+    if(sent!==window||mode!=='queue')return;
+    try{
+      await api('/me/player/play',{method:'PUT',query:{device_id:deviceId},body:{uris,position_ms:Math.max(0,Math.floor(pos))}});
+    }catch(e){
+      if(sent===window&&mode==='queue'){switching=null;toast(e.message)}
+      return;
+    }
+    if(sent!==window||mode!=='queue')return;
+    switching.pending=false;switching.until=Date.now()+5000;
+    if(!prefsSet){
+      prefsSet=true;
+      api('/me/player/shuffle',{method:'PUT',query:{state:false,device_id:deviceId}}).catch(()=>{});
+      api('/me/player/repeat',{method:'PUT',query:{state:'off',device_id:deviceId}}).catch(()=>{});
+    }
+  });
+  await windowSend;
 }
 async function playAt(i,user=true){
   if(i<0||i>=queue.length)return;
@@ -1417,13 +1427,17 @@ function togglePlay(){
 }
 function next(){
   if(mode==='context')return player?.nextTrack();
-  if(idx+1<queue.length)playAt(idx+1);
+  if(idx+1<queue.length)return playAt(idx+1);
   else toast('End of queue');
 }
 function prev(){
   if(mode==='context')return player?.previousTrack();
-  if(curPos()>3000||idx<=0)return player?.seek(0);
-  playAt(idx-1);
+  if(idx<=0||(!switching&&curPos()>3000)){
+    /* A second Previous press must see the restart before the SDK acknowledges the seek. */
+    ps.pos=0;ps.ts=Date.now();
+    return player?.seek(0);
+  }
+  return playAt(idx-1);
 }
 
 function onState(s){
@@ -1435,7 +1449,7 @@ function onState(s){
 
   const match=t=>sameTrack(t,cur);
   if(switching){
-    if(match(queue[switching.i])||Date.now()>switching.until)switching=null;
+    if(!switching.pending&&(match(queue[switching.i])||Date.now()>switching.until))switching=null;
     else{renderNow();renderPlayer();return}
   }
   const winEnd=sent?Math.min(queue.length,sent.start+sent.uris.length):queue.length;

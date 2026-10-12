@@ -21,6 +21,7 @@ It's one self-contained `index.html`: no build step, no backend, no dependencies
 - **Track context menus.** Right-click a track in a list or Needle-owned queue for Play next, Add to queue, Add to playlist, Like/unlike, or Start radio. Queue entries also offer Remove from queue, except for the current song. Playlist destinations are limited to owned or collaborative playlists; failed additions stay open with an error and can be retried.
 - **Browser-menu pass-through.** Choose **Browser menu on next right-click** in a track menu to close Needle's menu and let the next right-click use the browser menu once. Normal track-menu capture resumes afterward, including when the bypass was used outside a track or with Shift held. Shift + right-click also passes through without choosing the option first. There is no saved preference or checkbox. Right-clicks outside track lists and Needle-owned queue entries always pass through.
 - **Keyboard menus.** Focus a track row and press the context-menu key or Shift+F10. Arrow keys, Home, and End navigate actions; Escape closes the menu and returns focus to the track. Tab closes it and continues normal focus navigation.
+- **Transport controls.** In Needle-owned queues, Previous restarts the current song after three seconds; a quick second press selects the preceding song. Next and Previous can reverse a pending skip without using the old song's position. Playback-window requests run sequentially, and only the latest waiting selection is sent to Spotify. Spotify-owned queues use the SDK's next/previous controls.
 - Two-color theme, regenerated each session (◐ for a new one). Keyboard: `space` play/pause, `/` search, `shift+←/→` prev/next, `←/→` seek, `s` shuffle, `l` like, `r` radio.
 
 ## Setup
@@ -62,13 +63,13 @@ Spotify's 2026 Web API changes for development-mode apps removed recommendations
 
 ## Verification
 
-Run the synthetic playlist-radio regression suite with Node:
+Run the Node regression suite:
 
 ```sh
 node --test tests/*.test.cjs
 ```
 
-The tests execute the application's inline script with inert browser/player boundaries. They cover full playlist pagination, mix selection, artist and branch coverage, transactional seed rotation, reach boundaries, current/manual entry identity, queue handoff, serialized generation and low-water retries, synchronous SDK activation, persistence, track-menu capture and pass-through, exact queue removal, playlist-write success and failure, keyboard focus, and ordinary radio behavior without Spotify credentials or audio. Playlist-write tests use a mutable HTTP fixture through the application's API client. SDK activation tests check call ordering, not live autoplay or DRM.
+The tests execute the application's inline script with inert browser/player boundaries. They cover full playlist pagination, mix selection, artist and branch coverage, transactional seed rotation, reach boundaries, current/manual entry identity, queue handoff, serialized generation and low-water retries, synchronous SDK activation, persistence, track-menu capture and pass-through, exact queue removal, playlist-write success and failure, keyboard focus, and ordinary radio behavior without Spotify credentials or audio. Transport regressions cover rapid previous presses, skip reversal before SDK notification, serialized playback requests, obsolete queued targets, and recovery after request failure. Playlist-write tests use a mutable HTTP fixture through the application's API client. SDK activation tests check call ordering, not live autoplay or DRM.
 
 ## License
 
